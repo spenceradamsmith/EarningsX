@@ -3,6 +3,5 @@ yfinance
 pandas
 numpy
 ta
-catboost
 gunicorn
 flask_cors
