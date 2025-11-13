@@ -193,7 +193,7 @@ function renderStockDetail(stock) {
 }
 
 async function fetchFullStockData(ticker) {
-  const res = await fetch(`/predict?ticker=${encodeURIComponent(ticker)}`);
+  const res = await fetch(`https://earnings-predictor.onrender.com/predict?ticker=${encodeURIComponent(ticker)}`);
   const json = await res.json();
   return {
     ticker,
@@ -426,7 +426,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // parallel-fetch all tickers
     const responses = await Promise.all(tickers.map(async ticker => {
       try {
-        const res  = await fetch(`/predict?ticker=${encodeURIComponent(ticker)}`);
+        const res  = await fetch(`https://earnings-predictor.onrender.com/predict?ticker=${encodeURIComponent(ticker)}`);
         if (!res.ok) throw new Error(res.status);
         const json = await res.json();
 
