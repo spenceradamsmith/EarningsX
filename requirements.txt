@@ -5,3 +5,4 @@ numpy
 ta
 gunicorn
 flask_cors
+catboost==1.2.8

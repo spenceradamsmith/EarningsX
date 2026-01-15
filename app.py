@@ -8,17 +8,25 @@ from ta.trend import MACD, SMAIndicator
 from catboost import CatBoostClassifier, Pool
 from flask import Flask, jsonify, request
 from flask_cors import CORS
+from pathlib import Path
 
 app = Flask(__name__)
 CORS(app)
 
+MODEL_PATH = Path(__file__).with_name("catboost_model.cbm")
+model = None
+
+def get_model():
+    global model
+    if model is None:
+        m = CatBoostClassifier()
+        m.load_model(str(MODEL_PATH))
+        model = m
+    return model
+
 @app.route("/", methods=["GET"])
 def health_check():
     return jsonify({"status": "ok"}), 200
-
-# Load pre-trained model
-model = CatBoostClassifier()
-model.load_model("catboost_model.cbm")
 
 @app.route("/predict")
 def predict():
@@ -206,7 +214,8 @@ def predict():
         pool = Pool(data=df, cat_features=["sector", "quarter", "day_of_week"])
 
         # Predict probability
-        prob = model.predict_proba(pool)[:, 1][0]
+        m = get_model()
+        prob = m.predict_proba(pool)[:, 1][0]
         raw_pct = prob * 100
 
         # Rescale probability
