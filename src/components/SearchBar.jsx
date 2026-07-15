@@ -1,18 +1,32 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { searchStocks } from '../data/searchStocks';
+import { loadStaticData } from '../api';
 
 export default function SearchBar({ onSelect }) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
+  const [index, setIndex] = useState(searchStocks);
   const boxRef = useRef(null);
+
+  // Merge in every ticker we have prediction data for (e.g. SPCX, added after
+  // the static search list was generated), so anything covered is searchable.
+  useEffect(() => {
+    loadStaticData().then(({ stocks }) => {
+      const known = new Set(searchStocks.map((s) => s.ticker));
+      const extra = Object.values(stocks)
+        .filter((s) => s.ticker && !known.has(s.ticker))
+        .map((s) => ({ ticker: s.ticker, name: s.company_name || s.ticker }));
+      if (extra.length) setIndex([...extra, ...searchStocks]);
+    });
+  }, []);
 
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return [];
-    return searchStocks
+    return index
       .filter((s) => s.ticker.toLowerCase().includes(q) || s.name.toLowerCase().includes(q))
       .slice(0, 40);
-  }, [query]);
+  }, [query, index]);
 
   useEffect(() => {
     const onDocClick = (e) => {
