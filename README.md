@@ -59,7 +59,7 @@ tickers.json ──► getData.py ────► training_dataset.csv ──►
 npm install
 npm run dev          # React dev server
 
-python -m venv venv && ./venv/bin/pip install -r requirements.txt
+python -m venv venv && ./venv/bin/pip install -r .github/requirements.txt
 ./venv/bin/python getData.py       # (re)build training data   [slow: pulls Yahoo]
 ./venv/bin/python trainModel.py    # train + calibrate + print metrics
 ./venv/bin/python build_data.py    # regenerate public/data.json
