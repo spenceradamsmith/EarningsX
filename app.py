@@ -1,19 +1,21 @@
 import os
+import json
 import yfinance as yf
 import pandas as pd
 import numpy as np
 from datetime import timedelta
-from ta.momentum import RSIIndicator
-from ta.trend import MACD, SMAIndicator
 from catboost import CatBoostClassifier, Pool
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 from pathlib import Path
 
+from features import build_feature_row, get_close_volume, to_series, CAT_FEATURES
+
 app = Flask(__name__)
 CORS(app)
 
 MODEL_PATH = Path(__file__).with_name("catboost_model.cbm")
+CALIB_PATH = Path(__file__).with_name("calibration.json")
 model = None
 
 def get_model():
@@ -23,6 +25,15 @@ def get_model():
         m.load_model(str(MODEL_PATH))
         model = m
     return model
+
+def get_temperature():
+    try:
+        return float(json.load(open(CALIB_PATH)).get("temperature", 1.0))
+    except Exception:
+        return 1.0
+
+def sigmoid(x):
+    return 1.0 / (1.0 + np.exp(-x))
 
 @app.route("/", methods=["GET"])
 def health_check():
@@ -141,90 +152,37 @@ def predict():
     # If earnings within a week, compute prediction
     if isinstance(days_until, int) and days_until <= 7 and next_dt is not None:
         cutoff = next_dt - timedelta(days=7)
-        price_data = yf.download(ticker, start="2013-01-01", end=(cutoff + timedelta(days=1)), auto_adjust=True, progress=False)
-        spy_data = yf.download("SPY", start="2013-01-01", end=(cutoff + timedelta(days=1)), auto_adjust=True, progress=False)
+        end = cutoff + timedelta(days=1)
+        price_data = yf.download(ticker, start="2013-01-01", end=end, auto_adjust=True, progress=False)
+        spy_data = yf.download("SPY", start="2013-01-01", end=end, auto_adjust=True, progress=False)
         price_data = price_data[price_data.index <= cutoff]
         spy_data = spy_data[spy_data.index <= cutoff]
 
-        close = price_data["Close"]
-        volume = price_data["Volume"]
-        if getattr(close, "ndim", 1) != 1:
-            close = pd.Series(close.values.squeeze(), index=price_data.index)
-        if getattr(volume, "ndim", 1) != 1:
-            volume = pd.Series(volume.values.squeeze(), index=price_data.index)
+        close, volume = get_close_volume(price_data)
+        spy_close = to_series(spy_data["Close"]).dropna()
 
-        # Technical indicators
-        rsi = RSIIndicator(close, window=14).rsi().iloc[-1]
-        macd_diff = MACD(close).macd_diff().iloc[-1]
-        sma20 = SMAIndicator(close, 20).sma_indicator().iloc[-1]
-        sma50 = SMAIndicator(close, 50).sma_indicator().iloc[-1]
-        sma_ratio = sma20 / sma50 if sma50 != 0 else np.nan
+        # Earnings history for surprise + historical beat rate
+        try:
+            history = stock.get_earnings_dates(limit=40)
+            history.index = pd.to_datetime(history.index)
+            if history.index.tz is not None:
+                history.index = history.index.tz_convert(None)
+            past = history[history.index < next_dt].sort_index(ascending=False).head(8)
+        except Exception:
+            past = None
 
-        # Returns and volatility
-        if len(close) >= 30:
-            price_ret_30d = close.iloc[-1] / close.iloc[-30] - 1
-            volatility_30d = close[-30:].pct_change().std()
-            vol_avg = volume[-30:].mean()
-            vol_max = volume[-30:].max()
-            vol_norm = vol_avg / vol_max if vol_max != 0 else np.nan
-        else:
-            price_ret_30d = np.nan
-            volatility_30d = np.nan
-            vol_norm = np.nan
+        feature_row = build_feature_row(sector, beta_raw, eps_est, next_dt,
+                                        close, volume, spy_close, past)
+        for c in CAT_FEATURES:
+            feature_row[c] = "NA" if feature_row.get(c) is None else str(feature_row[c])
 
-        price_ret_7d = close.iloc[-7] / close.iloc[-14] - 1 if len(close) >= 14 else np.nan
+        pool = Pool(data=pd.DataFrame([feature_row]), cat_features=CAT_FEATURES)
 
-        # SPY return
-        spy_close = spy_data["Close"]
-        spy_return = float(spy_close.iloc[-1] / spy_close.iloc[-30] - 1) if len(spy_close) >= 30 else 0.0
-
-        price_to_avg30d = close.iloc[-1] / close.iloc[-30:].mean() if len(close) >= 30 else np.nan
-
-        # Earnings history and surprise
-        history = stock.get_earnings_dates(limit=40)
-        history.index = pd.to_datetime(history.index)
-        if history.index.tzinfo is not None:
-            history.index = history.index.tz_convert(None)
-        past = history[history.index < next_dt].sort_index(ascending=False).head(4)
-        if len(past) >= 1:
-            eps_surprises = (past["Reported EPS"] - past["EPS Estimate"]) / past["EPS Estimate"]
-            eps_surprise_avg = eps_surprises.mean()
-        else:
-            eps_surprise_avg = np.nan
-
-        feature_row = {
-            "sector": sector,
-            "beta": beta_raw,
-            "eps_estimate": eps_est,
-            "price_to_avg_30d": price_to_avg30d,
-            "eps_surprise_avg": eps_surprise_avg,
-            "price_return_30d": price_ret_30d,
-            "price_return_7d_before_cutoff": price_ret_7d,
-            "rsi_14": rsi,
-            "macd_diff": macd_diff,
-            "sma_ratio_20_50": sma_ratio,
-            "volatility_30d": volatility_30d,
-            "volume_avg_30d": vol_norm,
-            "spy_return": spy_return,
-            "relative_return_30d": price_ret_30d - spy_return,
-            "quarter": next_dt.quarter,
-            "day_of_week": next_dt.weekday(),
-        }
-        df = pd.DataFrame([feature_row])
-        pool = Pool(data=df, cat_features=["sector", "quarter", "day_of_week"])
-
-        # Predict probability
+        # Predict + temperature-scaled (calibrated) probability
         m = get_model()
-        prob = m.predict_proba(pool)[:, 1][0]
+        logit = float(m.predict(pool, prediction_type="RawFormulaVal")[0])
+        prob = sigmoid(logit / get_temperature())
         raw_pct = prob * 100
-
-        # Rescale probability
-        thresh = 0.57
-        if prob >= thresh:
-            scaled_val = 0.5 + (prob - thresh) / (1 - thresh) * 0.5
-        else:
-            scaled_val = (prob / thresh) * 0.5
-        scaled_pct = scaled_val * 100
 
         response = {
             "company_name": company_name,
@@ -240,7 +198,6 @@ def predict():
             "earnings_date": earnings_date_str,
             "expected_eps": eps_est,
             "raw_beat_pct": round(raw_pct, 2),
-            "scaled_beat_pct": round(scaled_pct, 2),
             "days_until": days_until
         }
         return jsonify(response), 200

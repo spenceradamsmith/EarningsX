@@ -1,59 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-    <title>EarningsX</title>
-    <link rel="stylesheet" href="styles.css" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="AI-powered stock earnings-beat predictor. Search any stock and see an AI prediction of whether it will beat expected earnings." />
+  <title>EarningsX — AI Earnings Predictor</title>
 </head>
 <body>
-    <div class="top-bar">
-        <div class="header-container">
-            <div class="header-top">
-                <h1>EarningsX</h1>
-                <div class="search-container">
-                    <div class="search-box">
-                        <img class="search-icon" src="https://cdn-icons-png.flaticon.com/128/3917/3917132.png" alt="Search Icon" />
-                        <input type="text" placeholder="Search for a stock..." />
-                    </div>
-                    <div class="search-results"></div>
-                </div>
-            </div>
-            <div class="categories-wrapper">
-                <nav class="categories-nav">
-                    <button id="all-button">All</button>
-                    <button>Technology</button>
-                    <button>Financials</button>
-                    <button>Consumer Discretionary</button>
-                    <button>Healthcare</button>
-                    <button>Communication Services</button>
-                    <button>Industrials</button>
-                    <button>Consumer Staples</button>
-                    <button>Energy</button>
-                    <button>Utilities</button>
-                    <button>Real Estate</button>
-                    <button>Materials</button>
-                </nav>
-            </div>
-        </div>
-    </div>
-    <main class="content">
-        <div class="cards-grid" id="cardsGrid"></div>
-        <div class="search-stock" id="searchStock">
-
-        </div>
-    </main>
-    <script src="customLogos.js"></script>
-    <script src="searchStocks.js"></script>
-    <script src="main.js"></script>
+  <div id="root"></div>
+  <script type="module" src="/src/main.jsx"></script>
 </body>
-<footer class="footer">
-    <div class="footer-content">
-        <p>&copy; <span id="currentYear"></span> EarningsX. All rights reserved.</p>
-        <script>
-            document.getElementById('currentYear').textContent = new Date().getFullYear();
-        </script>
-        <p>Created by Spencer Smith</p>
-    </div>
-</footer>
 </html>

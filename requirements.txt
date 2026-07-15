@@ -1,8 +1,11 @@
 Flask>=2.0
+flask_cors
+gunicorn
 yfinance
 pandas
 numpy
+scipy
+scikit-learn
 ta
-gunicorn
-flask_cors
+lxml
 catboost==1.2.8

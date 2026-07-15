@@ -1,2 +1,0 @@
-/predict   http://earnings-predictor-dev.us-east-2.elasticbeanstalk.com/predict   200
-/predict/* http://earnings-predictor-dev.us-east-2.elasticbeanstalk.com/predict/:splat 200

@@ -1,0 +1,45 @@
+name: Update predictions
+
+# Regenerates public/data.json from fresh Yahoo Finance data and commits it.
+# Free on GitHub Actions. Runs every weekday morning (markets closed on
+# weekends, so data doesn't change then) and can be triggered manually.
+on:
+  schedule:
+    - cron: '30 11 * * 1-5'   # 11:30 UTC (~7:30am ET) Mon–Fri
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-data
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Rebuild data.json
+        run: python build_data.py
+
+      - name: Commit if changed
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet -- public/data.json; then
+            git add public/data.json
+            git commit -m "chore: refresh predictions ($(date -u +%Y-%m-%d))"
+            git push
+          else
+            echo "No changes to data.json"
+          fi
