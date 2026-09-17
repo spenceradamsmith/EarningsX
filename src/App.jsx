@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { categories, fetchCategory, fetchStock, loadStaticData } from './api';
 import CategoryNav from './components/CategoryNav';
 import SearchBar from './components/SearchBar';
@@ -67,9 +67,23 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  // Keep the page content clear of the fixed header regardless of its real
+  // height (search bar wrapping, category row, font loading, narrow screens).
+  const topBarRef = useRef(null);
+  useEffect(() => {
+    const el = topBarRef.current;
+    if (!el) return;
+    const apply = () =>
+      document.documentElement.style.setProperty('--topbar-h', `${el.offsetHeight}px`);
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
   return (
     <>
-      <div className="top-bar">
+      <div className="top-bar" ref={topBarRef}>
         <div className="header-container">
           <div className="header-top">
             <h1 onClick={() => selectCategory('All')}>EarningsX</h1>

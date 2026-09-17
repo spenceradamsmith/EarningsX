@@ -209,7 +209,8 @@ button { font-family: inherit; }
 .content {
   max-width: 1500px;
   margin: 0 auto;
-  padding-top: clamp(120px, 15vw, 150px);
+  /* real header height (set by App via ResizeObserver) + breathing room */
+  padding-top: calc(var(--topbar-h, 130px) + 28px);
   min-height: 60vh;
 }
 .status-msg {
